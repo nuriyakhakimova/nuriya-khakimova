@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DiaBEK | Glucose Monitor</title>
+<style>
+:root{--bg:#f4f7fb;--card:#fff;--ink:#16203a;--mute:#5a6480;--line:#dde3ef;--ok:#1fa89a;--hi:#e8912d;--lo:#e5484d;--acc:#1b6fd8;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1426;--card:#19203a;--ink:#eef1fb;--mute:#a4adcc;--line:#2b3458}}
+:root[data-theme="dark"]{--bg:#0f1426;--card:#19203a;--ink:#eef1fb;--mute:#a4adcc;--line:#2b3458}
+html{height:100%}*{box-sizing:border-box}
+body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:Calibri,"Segoe UI",system-ui,Arial,sans-serif}
+.w{max-width:860px;margin:0 auto;padding:16px}
+header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-family:Cambria,Georgia,serif;font-size:26px;margin:0}h1 small{font-family:Calibri,Arial,sans-serif;font-size:13px;color:var(--mute);font-weight:400;margin-left:6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
+.now{text-align:center}.val{font-size:72px;font-weight:800;line-height:1}.u{font-size:18px;color:var(--mute);margin-left:4px;font-weight:400}
+.chip{display:inline-block;padding:5px 14px;border-radius:999px;color:#fff;font-weight:700;font-size:14px;margin-top:8px}
+.msg{margin-top:10px;color:var(--mute);font-size:14.5px}
+.grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+.st{background:var(--bg);border-radius:12px;padding:12px;text-align:center}.st b{display:block;font-size:24px}.st span{font-size:12.5px;color:var(--mute)}
+h2{font-family:Cambria,Georgia,serif;font-size:19px;margin:0 0 10px}
+form{display:flex;gap:8px;flex-wrap:wrap}
+input,select{padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:16px;min-width:0;flex:1 1 120px}
+button{padding:11px 16px;border:0;border-radius:10px;font-weight:700;font-size:15px;cursor:pointer;background:var(--acc);color:#fff}
+button.g{background:var(--bg);color:var(--ink);border:1px solid var(--line)}button.d{background:transparent;color:var(--lo);padding:4px 8px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+svg{width:100%;height:auto;display:block}
+table{width:100%;border-collapse:collapse;font-size:14.5px}td,th{padding:8px 4px;border-bottom:1px solid var(--line);text-align:left}
+.sc{overflow-x:auto}.note{font-size:12.5px;color:var(--mute);margin-top:6px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}
+</style>
+</head>
+<body><div class="w">
+<header><h1>DiaBEK<small>Sugar Sense</small></h1>
+<div><button class="g" id="unit">mg/dL</button></div></header>
+
+<div class="card now"><div><span class="val" id="cur">--</span><span class="u" id="cu"></span></div>
+<div><span class="chip" id="chip" style="background:#8a93b0">No data</span></div><div class="msg" id="msg">Add a reading or simulate the sensor to begin.</div></div>
+
+<div class="card"><h2>Add a reading</h2>
+<form id="f"><input id="v" type="number" step="any" min="0" placeholder="Glucose value" required>
+<select id="c"><option>Sensor</option><option>Fasting</option><option>Before meal</option><option>After meal</option><option>Bedtime</option></select>
+<button>Save</button></form>
+<div class="row"><button class="g" id="sim">Simulate sensor reading</button><button class="g" id="demo">Load 3 days of demo data</button></div>
+<div class="note">Until the wearable sensor is connected, readings are typed in or simulated.</div></div>
+
+<div class="card"><h2>Trend</h2><div id="chart"></div>
+<div class="note"><span class="dot" style="background:var(--ok)"></span>Target range 70 to 180 mg/dL (3.9 to 10.0 mmol/L)</div></div>
+
+<div class="card"><h2>Summary</h2><div class="grid" id="stats"></div>
+<div class="note">Estimated A1C uses the GMI formula and is only an estimate.</div></div>
+
+<div class="card"><h2>History</h2><div class="sc"><table id="tb"></table></div>
+<div class="row"><button class="g" id="csv">Download CSV</button><button class="g" id="clr">Clear all</button></div></div>
+
+<div class="note" style="text-align:center;margin-bottom:24px">DiaBEK is a student prototype and not medical advice. Always follow your doctor's care plan.</div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+let R=[],mm=false;const KEY='diabek_readings_v1',UK='diabek_unit_v1';
+try{R=JSON.parse(localStorage.getItem(KEY)||'[]');mm=localStorage.getItem(UK)==='1'}catch(e){R=[]}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(R));localStorage.setItem(UK,mm?'1':'0')}catch(e){}};
+const cv=x=>mm?(x/18.016).toFixed(1):Math.round(x);
+const stat=x=>x<70?['Low','var(--lo)','Glucose is low. Follow your care plan and get help if you feel unwell.']:x>180?['High','var(--hi)','Glucose is high. Drink water and follow your care plan. Contact your doctor if it stays high.']:['In range','var(--ok)','Great, you are in your target range.'];
+const fmt=t=>new Date(t).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+function add(v,c,t){R.push({t:t||Date.now(),v:v,c:c||'Sensor'});R.sort((a,b)=>a.t-b.t);save();draw()}
+function draw(){
+ $('unit').textContent=mm?'mmol/L':'mg/dL';$('cu').textContent=mm?'mmol/L':'mg/dL';
+ const last=R[R.length-1];
+ if(last){const s=stat(last.v);$('cur').textContent=cv(last.v);$('chip').textContent=s[0];$('chip').style.background=s[1];$('msg').textContent=s[2]+' ('+fmt(last.t)+')'}
+ else{$('cur').textContent='--';$('chip').textContent='No data';$('chip').style.background='#8a93b0';$('msg').textContent='Add a reading or simulate the sensor to begin.'}
+ // chart
+ const D=R.slice(-30),W=700,H=240,pl=44,pr=10,pt=10,pb=24,mx=Math.max(260,...D.map(d=>d.v+20)),mn=40;
+ const y=v=>pt+(H-pt-pb)*(1-(v-mn)/(mx-mn)),x=i=>pl+(W-pl-pr)*(D.length<2?0.5:i/(D.length-1));
+ let s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="Glucose trend">';
+ s+='<rect x="'+pl+'" y="'+y(180)+'" width="'+(W-pl-pr)+'" height="'+(y(70)-y(180))+'" fill="#1fa89a" opacity=".15"/>';
+ [70,120,180,240].forEach(g=>{s+='<line x1="'+pl+'" x2="'+(W-pr)+'" y1="'+y(g)+'" y2="'+y(g)+'" stroke="#8a93b0" stroke-opacity=".35"/><text x="'+(pl-6)+'" y="'+(y(g)+4)+'" font-size="12" text-anchor="end" fill="#8a93b0">'+cv(g)+'</text>'});
+ if(D.length){s+='<polyline fill="none" stroke="#1b6fd8" stroke-width="3" stroke-linejoin="round" points="'+D.map((d,i)=>x(i)+','+y(d.v)).join(' ')+'"/>';
+ D.forEach((d,i)=>{s+='<circle cx="'+x(i)+'" cy="'+y(d.v)+'" r="4.5" fill="'+stat(d.v)[1]+'"/>'})}
+ else s+='<text x="'+W/2+'" y="'+H/2+'" text-anchor="middle" fill="#8a93b0" font-size="16">No readings yet</text>';
+ $('chart').innerHTML=s+'</svg>';
+ // stats
+ const n=R.length,avg=n?R.reduce((a,b)=>a+b.v,0)/n:0,inr=n?R.filter(r=>r.v>=70&&r.v<=180).length/n*100:0;
+ $('stats').innerHTML=[['Readings',n],['Average',n?cv(avg):'--'],['Time in range',n?Math.round(inr)+'%':'--'],['Lows',R.filter(r=>r.v<70).length],['Highs',R.filter(r=>r.v>180).length],['Est. A1C',n?(3.31+0.02392*avg).toFixed(1)+'%':'--']].map(a=>'<div class="st"><b>'+a[1]+'</b><span>'+a[0]+'</span></div>').join('');
+ // table
+ $('tb').innerHTML='<tr><th>Time</th><th>Value</th><th>Type</th><th></th></tr>'+R.slice().reverse().slice(0,40).map(r=>'<tr><td>'+fmt(r.t)+'</td><td><span class="dot" style="background:'+stat(r.v)[1]+'"></span>'+cv(r.v)+'</td><td>'+r.c+'</td><td><button class="d" data-t="'+r.t+'" aria-label="Delete reading">Delete</button></td></tr>').join('')||'<tr><td colspan="4">No readings yet</td></tr>';
+}
+$('f').onsubmit=e=>{e.preventDefault();let v=parseFloat($('v').value);if(!(v>0))return;if(mm)v=v*18.016;if(v<20||v>600){alert('That value looks unrealistic. Please check it.');return}add(Math.round(v),$('c').value);$('v').value=''};
+$('sim').onclick=()=>{const p=R.length?R[R.length-1].v:110;add(Math.max(45,Math.min(320,Math.round(p+(Math.random()-.5)*60))),'Sensor')};
+$('demo').onclick=()=>{const now=Date.now();let v=110;for(let i=288;i>=0;i--){const t=now-i*15*60000,h=new Date(t).getHours();v+=(Math.random()-.5)*14+((h==8||h==13||h==19)?9:-2);v=Math.max(52,Math.min(260,v));R.push({t:t,v:Math.round(v),c:'Sensor'})}R.sort((a,b)=>a.t-b.t);save();draw()};
+$('unit').onclick=()=>{mm=!mm;save();draw()};
+$('clr').onclick=()=>{if(confirm('Delete all readings?')){R=[];save();draw()}};
+$('tb').onclick=e=>{const t=e.target.dataset&&e.target.dataset.t;if(t){R=R.filter(r=>String(r.t)!==t);save();draw()}};
+$('csv').onclick=()=>{const b=new Blob(['time,mg_dl,type\n'+R.map(r=>new Date(r.t).toISOString()+','+r.v+','+r.c).join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='diabek-readings.csv';a.click()};
+draw();
+</script>
+</body>
+</html>
